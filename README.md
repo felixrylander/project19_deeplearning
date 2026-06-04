@@ -12,7 +12,7 @@ PROJECT19/
 │   └── README.md
 ├── src/                        # Source code
 │   ├── model.py                    # Main model training
-│   └── noise.py                    # Datagenrated noise fnc
+│   └── noise.py                    # Functions for loading image, adding noise and making patches
 ├── .gitignore
 ├── main.py                     
 ├── project19.pdf               # Project Task

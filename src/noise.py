@@ -4,17 +4,25 @@ from PIL import Image
 
 SIGMA_SET = (15, 25, 50)
 
+def load_image(p: Path) -> np.ndarray:
+    """
+    Load picture
+    """
+    return np.array(Image.open(p).convert("L"), dtype=np.float32)
 
-def add_gaussian_noise(image: np.ndarray, sigma: float, rng: np.random.Generator | None = None) -> np.ndarray:
+def add_gaussian_noise(image: np.ndarray, sigma: float, rng: np.random.Generator) -> np.ndarray:
+    """
+    Adds a random gaussian noise from 3 different levels in SIGMA_SET
+    """
     rng = rng or np.random.default_rng()
     noise = rng.normal(0, sigma, image.shape).astype(np.float32)
-    return np.clip(image.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+    return np.clip(image.astype(np.float32) + noise, 0, 255).astype(np.float32)
 
-
-def generate_noisy_dataset(src: Path, dst: Path, sigma_set=SIGMA_SET, seed: int | None = None) -> None:
-    dst.mkdir(parents=True, exist_ok=True)
-    rng = np.random.default_rng(seed)
-    for idx, p in enumerate(sorted(src.glob("*.png")), 1):
-        sigma = sigma_set[(idx - 1) % len(sigma_set)]
-        noisy = add_gaussian_noise(np.array(Image.open(p).convert("L")), float(sigma), rng)
-        Image.fromarray(noisy).save(dst / f"test_{idx:03d}_{sigma}.png")
+def img_patch(image: np.ndarray, rng: np.random.Generator, patch_size = 64) -> np.ndarray:
+    """
+    Creates a patch of full image from dataset.
+    """
+    h, w = image.shape
+    y = rng.integers(0, h - patch_size)
+    x = rng.integers(0, w - patch_size)
+    return image[y:y+patch_size, x:x+patch_size]
