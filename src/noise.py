@@ -17,4 +17,4 @@ def generate_noisy_dataset(src: Path, dst: Path, sigma_set=SIGMA_SET, seed: int 
     for idx, p in enumerate(sorted(src.glob("*.png")), 1):
         sigma = sigma_set[(idx - 1) % len(sigma_set)]
         noisy = add_gaussian_noise(np.array(Image.open(p).convert("L")), float(sigma), rng)
-        Image.fromarray(noisy).save(dst / f"test_{idx:03d}.png")
+        Image.fromarray(noisy).save(dst / f"test_{idx:03d}_{sigma}.png")
