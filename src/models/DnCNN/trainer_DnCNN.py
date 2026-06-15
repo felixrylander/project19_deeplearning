@@ -1,5 +1,5 @@
 import torch
-from loss_metrics import dncnn_loss, psnr
+from src.models.DnCNN.loss_metrics import dncnn_loss, psnr
 
 def train_one_epoch(model, dataloader, optimizer, device):
     """
@@ -38,7 +38,7 @@ def validate(model, dataloader, device):
     total_psnr = 0
     total_loss = 0
 
-    with torch.no_grad():               # Turns of gradientcalculations. Saves memory
+    with torch.no_grad(): # Turns of gradientcalculations. Saves memory
         for noisy, clean in dataloader: # Loop over all batches 
             # Moves data to GPU if exists, else CPU
             noisy = noisy.to(device)
