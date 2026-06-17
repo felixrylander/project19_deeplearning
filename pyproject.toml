@@ -9,6 +9,7 @@ dependencies = [
     "pillow",
     "torch",
     "torchvision",
+    "matplotlib.pyplot"
 ]
 
 [tool.setuptools]
