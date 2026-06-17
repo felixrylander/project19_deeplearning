@@ -1,6 +1,5 @@
 import torch
-
-from loss_metrics_CNN import cnn_loss, batch_metrics
+from src.models.CNN.loss_metrics_CNN import cnn_loss, batch_metrics
 
 
 def train_one_epoch(model, dataloader, optimizer, device):
@@ -90,6 +89,7 @@ def fit(model, train_loader, val_loader, optimizer, device, epochs):
     """
 
     history = []
+    best_psnr = 0.0
 
     for epoch in range(epochs):
         train_loss = train_one_epoch(model, train_loader, optimizer, device)
@@ -103,7 +103,6 @@ def fit(model, train_loader, val_loader, optimizer, device, epochs):
             "val_mae": val_metrics["mae"],
             "val_psnr": val_metrics["psnr"],
         }
-
         history.append(epoch_results)
 
         print(
@@ -112,5 +111,10 @@ def fit(model, train_loader, val_loader, optimizer, device, epochs):
             f"Val Loss: {val_metrics['loss']:.6f} "
             f"Val PSNR: {val_metrics['psnr']:.2f} dB"
         )
+
+        if save_path is not None and val_metrics["psnr"] > best_psnr:
+            best_psnr = val_metrics["psnr"]
+            torch.save(model.state_dict(), save_path)
+            print(f"  New best model saved (PSNR: {best_psnr:.2f} dB)")
 
     return history

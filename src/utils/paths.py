@@ -5,3 +5,4 @@ BSD400, BSD68 = DATA / "BSD400", DATA / "BSD68"
 
 RESULTS = Path("src/Results")
 DCNN_RES = RESULTS / "DnCNN"
+CNN_RES = RESULTS / "CNN"
