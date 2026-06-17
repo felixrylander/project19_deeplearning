@@ -1,13 +1,14 @@
 import torch
-from src.models.CNN.loss_metrics_CNN import cnn_loss, batch_metrics
+from src.models.NAFNet.loss_metrics_NAFNet import nafnet_loss, batch_metrics
 
 
 def train_one_epoch(model, dataloader, optimizer, device):
     """
-    Train the CNN denoiser for one epoch.
+    Train the NAFNet denoiser for one epoch.
 
-    The CNN directly predicts the clean image. The loss compares the predicted
-    denoised image with the real clean image.
+    NAFNet predicts the clean image directly, so the loss compares the predicted
+    denoised image with the real clean image. Returns the average loss over all
+    batches.
     """
 
     model.train()
@@ -20,7 +21,7 @@ def train_one_epoch(model, dataloader, optimizer, device):
         optimizer.zero_grad()
 
         denoised = model(noisy)
-        loss = cnn_loss(denoised, clean)
+        loss = nafnet_loss(denoised, clean)
 
         loss.backward()
         optimizer.step()
@@ -33,10 +34,11 @@ def train_one_epoch(model, dataloader, optimizer, device):
 @torch.no_grad()
 def validate(model, dataloader, device):
     """
-    Validate the CNN denoiser.
+    Validate the NAFNet denoiser.
 
-    The model output is clamped to [0, 1] before image quality metrics are
-    calculated, because valid image pixel values should stay in this range.
+    The model output is clamped to [0, 1] inside batch_metrics before the image
+    quality metrics are calculated, because valid image pixel values should stay
+    in this range. Returns the average loss and metrics over all batches.
     """
 
     model.eval()
@@ -51,7 +53,7 @@ def validate(model, dataloader, device):
         clean = clean.to(device)
 
         denoised = model(noisy)
-        loss = cnn_loss(denoised, clean)
+        loss = nafnet_loss(denoised, clean)
 
         metrics = batch_metrics(denoised, clean)
 
@@ -72,18 +74,19 @@ def validate(model, dataloader, device):
 
 def fit(model, train_loader, val_loader, optimizer, device, epochs, save_path=None):
     """
-    Train and validate the CNN denoiser for multiple epochs.
+    Train and validate the NAFNet denoiser for multiple epochs.
 
     This function stores the results from each epoch, which makes it easier to
-    plot learning curves and compare this CNN model with other models later.
-    If save_path is given, the model with the best validation PSNR is saved there.
+    plot learning curves and compare this NAFNet model with the CNN and DnCNN
+    models later. If save_path is given, the model with the best validation PSNR
+    is saved there.
 
     Args:
-        model: CNN denoising model
+        model: NAFNet denoising model
         train_loader: dataloader for training data
         val_loader: dataloader for validation data
         optimizer: optimizer used for training
-        device: cuda or cpu device
+        device: cuda, mps or cpu device
         epochs: number of training epochs
         save_path: where to save the best model. None disables saving.
     Returns:
