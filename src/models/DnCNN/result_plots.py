@@ -56,5 +56,5 @@ def loss_psnr(train_losses, val_losses, val_psnrs, save_path):
     ax2.legend()
 
     plt.tight_layout()
-    plt.savefig(f"{save_path}/training_plot.png")
+    plt.savefig(save_path)
     plt.show()

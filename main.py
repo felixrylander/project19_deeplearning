@@ -7,20 +7,12 @@ from torch.utils.data import DataLoader
 from src.utils.paths import BSD400, BSD68, DCNN_RES
 
 from src.noise import generate_noisy_dataset
-#from src.paths import BSD400, BSD68, BSD400_NOISE, BSD68_NOISE
 
 from src.models.DnCNN.model_DnCNN import DnCNN
 from src.models.DnCNN.trainer_DnCNN import train_one_epoch, validate
 from src.models.DnCNN.result_plots import denoise_image, loss_psnr
 from src.preprocessing.input_data import BSDDataset
 
-
-def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("--seed", type=int, default=None)
-    args = p.parse_args()
-    for src, dst in [(BSD400, BSD400_NOISE), (BSD68, BSD68_NOISE)]:
-        generate_noisy_dataset(src=src, dst=dst, seed=args.seed)
 
 def DnCNN_main(mode, save_model = "dncnn_best.pth"):
 
