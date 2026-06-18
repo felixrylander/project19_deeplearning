@@ -47,6 +47,7 @@ def validate(model, dataloader, device):
     total_mse = 0.0
     total_mae = 0.0
     total_psnr = 0.0
+    total_ssim = 0.0
 
     for noisy, clean in dataloader:
         noisy = noisy.to(device)
@@ -61,6 +62,7 @@ def validate(model, dataloader, device):
         total_mse += metrics["mse"]
         total_mae += metrics["mae"]
         total_psnr += metrics["psnr"]
+        total_ssim += metrics["ssim"]
 
     num_batches = len(dataloader)
 
@@ -69,6 +71,7 @@ def validate(model, dataloader, device):
         "mse": total_mse / num_batches,
         "mae": total_mae / num_batches,
         "psnr": total_psnr / num_batches,
+        "ssim": total_ssim / num_batches,
     }
 
 
@@ -107,6 +110,7 @@ def fit(model, train_loader, val_loader, optimizer, device, epochs, save_path=No
             "val_mse": val_metrics["mse"],
             "val_mae": val_metrics["mae"],
             "val_psnr": val_metrics["psnr"],
+            "val_ssim": val_metrics["ssim"],
         }
         history.append(epoch_results)
 
@@ -114,7 +118,8 @@ def fit(model, train_loader, val_loader, optimizer, device, epochs, save_path=No
             f"Epoch [{epoch + 1}/{epochs}] "
             f"Train Loss: {train_loss:.6f} "
             f"Val Loss: {val_metrics['loss']:.6f} "
-            f"Val PSNR: {val_metrics['psnr']:.2f} dB"
+            f"Val PSNR: {val_metrics['psnr']:.2f} dB "
+            f"Val SSIM: {val_metrics['ssim']:.4f}"
         )
 
         if save_path is not None and val_metrics["psnr"] > best_psnr:

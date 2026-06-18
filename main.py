@@ -1,16 +1,14 @@
 import argparse
-from PIL import Image
+
 import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
 from src.utils.paths import BSD400, BSD68, CNN_RES, DCNN_RES, NAFNET_RES
 
-from src.noise import generate_noisy_dataset
-
 from src.models.DnCNN.model_DnCNN import DnCNN
 from src.models.DnCNN.trainer_DnCNN import train_one_epoch, validate
-from src.models.DnCNN.result_plots import denoise_image, loss_psnr
+from src.models.DnCNN.result_plots import denoise_image, loss_psnr, save_grayscale_image
 from src.preprocessing.input_data import BSDDataset
 
 from src.models.CNN.model_CNN import CNNDenoiser
@@ -18,10 +16,8 @@ from src.models.CNN.trainer_CNN import fit
 from src.models.CNN.loss_metrics_CNN import count_parameters
 from src.preprocessing.noise import load_image, add_gaussian_noise
 
-from src.utils.paths import NAFNET_RES
 from src.models.NAFNet.model_NAFNet import NAFNet
 from src.models.NAFNet.trainer_NAFNet import fit as fit_nafnet
-from src.models.NAFNet.loss_metrics_NAFNet import count_parameters
 
 # Note: both trainer_CNN.fit and trainer_NAFNet.fit are called "fit", so import
 # the NAFNet one under an alias (fit_nafnet) to avoid a name clash with the CNN
@@ -58,18 +54,22 @@ def DnCNN_main(mode, save_model = "dncnn_best.pth"):
         best_psnr = 0
 
         # Save values for plotting
-        train_losses, val_losses, val_psnrs = [], [], []
+        train_losses, val_losses, val_psnrs, val_ssims = [], [], [], []
 
         # Training loop
         for epoch in range(1, 51):
             train_loss = train_one_epoch(model, train_loader, optimizer, device)
-            val_loss, val_psnr = validate(model, val_loader, device)
+            val_loss, val_psnr, val_ssim = validate(model, val_loader, device)
 
             train_losses.append(train_loss)
             val_losses.append(val_loss)
             val_psnrs.append(val_psnr)
+            val_ssims.append(val_ssim)
 
-            print(f"Epoch {epoch:03d} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | PSNR: {val_psnr:.2f} dB")
+            print(
+                f"Epoch {epoch:03d} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | "
+                f"PSNR: {val_psnr:.2f} dB | SSIM: {val_ssim:.4f}"
+            )
 
             if val_psnr > best_psnr:
                 best_psnr = val_psnr
@@ -77,12 +77,14 @@ def DnCNN_main(mode, save_model = "dncnn_best.pth"):
                 print(f"  New best model saved (PSNR: {best_psnr:.2f} dB)")
             
         #Plot loss and psnr
-        loss_psnr(train_losses, val_losses, val_psnrs, save_path = DCNN_RES / "training_plot.pdf")
+        loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path = DCNN_RES / "training_plot.pdf")
 
     if mode == "denoise":
         # Denoise an image with trained network
-        result = denoise_image(model_path = DCNN_RES / save_model , image_path = BSD68 / "test003.png", sigma=25)
-        Image.fromarray((result * 255).astype(np.uint8)).save(DCNN_RES / "denoise_patch_10.png")
+        noisy, result = denoise_image(model_path = DCNN_RES / save_model , image_path = BSD68 / "test003.png", sigma=25)
+        DCNN_RES.mkdir(parents=True, exist_ok=True)
+        save_grayscale_image(noisy, DCNN_RES / "noisy_patch_10.png")
+        save_grayscale_image(result, DCNN_RES / "denoise_patch_10.png")
 
 
 def CNN_main(mode, save_model = "cnn_best.pth"):
@@ -132,9 +134,10 @@ def CNN_main(mode, save_model = "cnn_best.pth"):
         train_losses = [h["train_loss"] for h in history]
         val_losses = [h["val_loss"] for h in history]
         val_psnrs = [h["val_psnr"] for h in history]
+        val_ssims = [h["val_ssim"] for h in history]
  
         # Plot loss and psnr
-        loss_psnr(train_losses, val_losses, val_psnrs, save_path = CNN_RES / "training_plot.pdf")
+        loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path = CNN_RES / "training_plot.pdf")
  
     if mode == "denoise":
         # Choose device in order cuda, mps, cpu
@@ -158,7 +161,8 @@ def CNN_main(mode, save_model = "cnn_best.pth"):
  
         result = denoised.squeeze().cpu().numpy()
         CNN_RES.mkdir(parents=True, exist_ok=True)
-        Image.fromarray((result * 255).astype(np.uint8)).save(CNN_RES / "denoise_cnn.png")
+        save_grayscale_image(noisy, CNN_RES / "noisy_cnn.png")
+        save_grayscale_image(result, CNN_RES / "denoise_cnn.png")
 
 
 def NAFNet_main(mode, save_model="nafnet_best.pth"):
@@ -212,9 +216,10 @@ def NAFNet_main(mode, save_model="nafnet_best.pth"):
         train_losses = [h["train_loss"] for h in history]
         val_losses = [h["val_loss"] for h in history]
         val_psnrs = [h["val_psnr"] for h in history]
+        val_ssims = [h["val_ssim"] for h in history]
  
         # Plot loss and psnr
-        loss_psnr(train_losses, val_losses, val_psnrs, save_path = NAFNET_RES / "training_plot.pdf")
+        loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path = NAFNET_RES / "training_plot.pdf")
  
     if mode == "denoise":
         # Choose device in order cuda, mps, cpu
@@ -238,8 +243,19 @@ def NAFNet_main(mode, save_model="nafnet_best.pth"):
  
         result = denoised.squeeze().cpu().numpy()
         NAFNET_RES.mkdir(parents=True, exist_ok=True)
-        Image.fromarray((result * 255).astype(np.uint8)).save(NAFNET_RES / "denoise_nafnet.png")
+        save_grayscale_image(noisy, NAFNET_RES / "noisy_nafnet.png")
+        save_grayscale_image(result, NAFNET_RES / "denoise_nafnet.png")
 
 if __name__ == "__main__":
-    DnCNN_main(mode = "denoise", save_model = "dncnn_best_patch_10.pth")
-    CNN_main(mode = "denoise", save_model = "cnn_best.pth")
+    parser = argparse.ArgumentParser(description="Train or denoise with the three image denoising models.")
+    parser.add_argument(
+        "--mode",
+        choices=("train", "denoise"),
+        default="train",
+        help="Select whether to train the models or run denoising on the test image.",
+    )
+    args = parser.parse_args()
+
+    DnCNN_main(mode=args.mode)
+    CNN_main(mode=args.mode)
+    NAFNet_main(mode=args.mode)

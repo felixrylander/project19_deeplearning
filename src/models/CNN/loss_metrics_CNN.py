@@ -64,19 +64,53 @@ def batch_metrics(denoised, clean):
         denoised: denoised image tensor
         clean: clean target image tensor
     Returns:
-        dictionary containing MSE, MAE and PSNR
+        dictionary containing MSE, MAE, PSNR and SSIM
     """
     denoised = torch.clamp(denoised, 0.0, 1.0)
 
     mse_value = F.mse_loss(denoised, clean).item()
     mae_value = mae(denoised, clean)
     psnr_value = psnr(denoised, clean)
+    ssim_value = ssim(denoised, clean)
 
     return {
         "mse": mse_value,
         "mae": mae_value,
         "psnr": psnr_value,
+        "ssim": ssim_value,
     }
+
+
+@torch.no_grad()
+def ssim(denoised, clean, max_pixel_value: float = 1.0):
+    """
+    Calculate SSIM between a denoised image and a clean image.
+
+    This uses a global SSIM approximation over the full image tensors.
+    """
+    if denoised.dim() == 3:
+        denoised = denoised.unsqueeze(0)
+    if clean.dim() == 3:
+        clean = clean.unsqueeze(0)
+
+    denoised = torch.clamp(denoised, 0.0, max_pixel_value)
+    clean = torch.clamp(clean, 0.0, max_pixel_value)
+
+    dims = tuple(range(2, denoised.dim()))
+    mu_x = denoised.mean(dim=dims, keepdim=True)
+    mu_y = clean.mean(dim=dims, keepdim=True)
+
+    sigma_x = ((denoised - mu_x) ** 2).mean(dim=dims, keepdim=True)
+    sigma_y = ((clean - mu_y) ** 2).mean(dim=dims, keepdim=True)
+    sigma_xy = ((denoised - mu_x) * (clean - mu_y)).mean(dim=dims, keepdim=True)
+
+    c1 = (0.01 * max_pixel_value) ** 2
+    c2 = (0.03 * max_pixel_value) ** 2
+
+    numerator = (2 * mu_x * mu_y + c1) * (2 * sigma_xy + c2)
+    denominator = (mu_x**2 + mu_y**2 + c1) * (sigma_x + sigma_y + c2)
+    score = numerator / denominator
+    return score.mean().item()
 
 
 def count_parameters(model):

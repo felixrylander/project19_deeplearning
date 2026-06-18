@@ -1,5 +1,5 @@
 import torch
-from src.models.DnCNN.loss_metrics import dncnn_loss, psnr
+from src.models.DnCNN.loss_metrics import dncnn_loss, psnr, ssim
 
 def train_one_epoch(model, dataloader, optimizer, device):
     """
@@ -32,24 +32,26 @@ def train_one_epoch(model, dataloader, optimizer, device):
 def validate(model, dataloader, device):
     """
     Evaluates the model on the validation set.
-    Returns the average loss and average PSNR over all batches.
+    Returns the average loss, PSNR and SSIM over all batches.
     """
     model.eval()
     total_psnr = 0
+    total_ssim = 0
     total_loss = 0
 
-    with torch.no_grad(): # Turns of gradientcalculations. Saves memory
-        for noisy, clean in dataloader: # Loop over all batches 
+    with torch.no_grad():  # Turns of gradientcalculations. Saves memory
+        for noisy, clean in dataloader:  # Loop over all batches
             # Moves data to GPU if exists, else CPU
             noisy = noisy.to(device)
             clean = clean.to(device)
 
             residual = model(noisy)
-            denoised = torch.clamp(noisy - residual, 0, 1) # Calculates the denosed image and clamps it from 0 to 1
-            
-            # Calculate psnr on the denoised image 
+            denoised = torch.clamp(noisy - residual, 0, 1)  # Calculates the denosed image and clamps it from 0 to 1
+
+            # Calculate psnr on the denoised image
             total_loss += dncnn_loss(residual, noisy, clean).item()
             total_psnr += psnr(clean, denoised)
+            total_ssim += ssim(clean, denoised)
 
     n = len(dataloader)
-    return total_loss / n, total_psnr / n
+    return total_loss / n, total_psnr / n, total_ssim / n
