@@ -2,6 +2,8 @@ import argparse
 
 import numpy as np
 
+import time
+
 import torch
 from torch.utils.data import DataLoader
 from src.utils.paths import BSD400, BSD68, CNN_RES, DCNN_RES, NAFNET_RES
@@ -25,7 +27,38 @@ from src.models.NAFNet.trainer_NAFNet import fit as fit_nafnet
 # either is fine.
 
 
-def DnCNN_main(mode, save_model = "dncnn_best.pth"):
+
+def efficiency_report(model, device, model_name):
+    # Parameter count
+    n_params = sum(p.numel() for p in model.parameters())
+
+    # Inference time
+    dummy = torch.randn(1, 1, 64, 64).to(device)
+    for _ in range(10):  # warmup
+        with torch.no_grad():
+            model(dummy)
+
+    start = time.time()
+    for _ in range(100):
+        with torch.no_grad():
+            model(dummy)
+    ms_per_image = (time.time() - start) / 100 * 1000
+
+    # Peak memory
+    if torch.cuda.is_available():
+        memory_mb = torch.cuda.max_memory_allocated() / 1e6
+    elif torch.backends.mps.is_available():
+        memory_mb = torch.mps.current_allocated_memory() / 1e6
+    else:
+        memory_mb = 0.0
+
+    print(f"\n--- {model_name} Efficiency Report ---")
+    print(f"Parameters:     {n_params:,}")
+    print(f"Inference time: {ms_per_image:.2f} ms/image")
+    print(f"Peak memory:    {memory_mb:.1f} MB")
+
+
+def DnCNN_main(mode, save_model = "dncnn_best_100_20_e70.pth"):
 
     if mode == "train":
         # Choose device in order cuda, mps, cpu
@@ -36,12 +69,12 @@ def DnCNN_main(mode, save_model = "dncnn_best.pth"):
         train_set = BSDDataset(root= BSD400,
             patch_size=64,
             sigma_set=(15, 25, 50),
-            patches_per_image=10,
+            patches_per_image=100,
             seed=42)
         val_set = BSDDataset(root=BSD68,
             patch_size=64,
             sigma_set=(15, 25, 50),
-            patches_per_image=5,
+            patches_per_image=20,
             seed=0)
 
         train_loader = DataLoader(train_set, batch_size=32, shuffle=True)
@@ -57,7 +90,7 @@ def DnCNN_main(mode, save_model = "dncnn_best.pth"):
         train_losses, val_losses, val_psnrs, val_ssims = [], [], [], []
 
         # Training loop
-        for epoch in range(1, 51):
+        for epoch in range(1, 71):
             train_loss = train_one_epoch(model, train_loader, optimizer, device)
             val_loss, val_psnr, val_ssim = validate(model, val_loader, device)
 
@@ -77,17 +110,18 @@ def DnCNN_main(mode, save_model = "dncnn_best.pth"):
                 print(f"  New best model saved (PSNR: {best_psnr:.2f} dB)")
             
         #Plot loss and psnr
-        loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path = DCNN_RES / "training_plot.pdf")
+        efficiency_report(model, device, "DnCNN")
+        loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path = DCNN_RES / "training_plot_100_20_e70.pdf")
 
     if mode == "denoise":
         # Denoise an image with trained network
         noisy, result = denoise_image(model_path = DCNN_RES / save_model , image_path = BSD68 / "test003.png", sigma=25)
         DCNN_RES.mkdir(parents=True, exist_ok=True)
-        save_grayscale_image(noisy, DCNN_RES / "noisy_patch_10.png")
-        save_grayscale_image(result, DCNN_RES / "denoise_patch_10.png")
+        save_grayscale_image(noisy, DCNN_RES / "noisy_100_20_e70.png")
+        save_grayscale_image(result, DCNN_RES / "denoise_100_20_e70.png")
 
 
-def CNN_main(mode, save_model = "cnn_best.pth"):
+def CNN_main(mode, save_model = "cnn_best_100_20_e70.pth"):
     """
     Trains the CNN denoiser or uses a trained CNN to denoise an image.
  
@@ -106,12 +140,12 @@ def CNN_main(mode, save_model = "cnn_best.pth"):
         train_set = BSDDataset(root=BSD400,
             patch_size=64,
             sigma_set=(15, 25, 50),
-            patches_per_image=10,
+            patches_per_image=100,
             seed=42)
         val_set = BSDDataset(root=BSD68,
             patch_size=64,
             sigma_set=(15, 25, 50),
-            patches_per_image=5,
+            patches_per_image=20,
             seed=0)
  
         train_loader = DataLoader(train_set, batch_size=32, shuffle=True)
@@ -127,7 +161,7 @@ def CNN_main(mode, save_model = "cnn_best.pth"):
         # Train for all epochs. fit() runs the loop, prints each epoch, saves the
         # best model by validation PSNR, and returns one results dict per epoch.
         history = fit(model, train_loader, val_loader, optimizer, device,
-            epochs=50,
+            epochs=70,
             save_path=CNN_RES / save_model)
  
         # Pull out the per-epoch values for plotting
@@ -137,7 +171,8 @@ def CNN_main(mode, save_model = "cnn_best.pth"):
         val_ssims = [h["val_ssim"] for h in history]
  
         # Plot loss and psnr
-        loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path = CNN_RES / "training_plot.pdf")
+        efficiency_report(model, device, "CNN")
+        loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path = CNN_RES / "training_plot_100_20_e70.pdf")
  
     if mode == "denoise":
         # Choose device in order cuda, mps, cpu
@@ -161,11 +196,11 @@ def CNN_main(mode, save_model = "cnn_best.pth"):
  
         result = denoised.squeeze().cpu().numpy()
         CNN_RES.mkdir(parents=True, exist_ok=True)
-        save_grayscale_image(noisy, CNN_RES / "noisy_cnn.png")
-        save_grayscale_image(result, CNN_RES / "denoise_cnn.png")
+        save_grayscale_image(noisy, CNN_RES / "noisy_cnn_100_20_e70.png")
+        save_grayscale_image(result, CNN_RES / "denoise_cnn_100_20_e70.png")
 
 
-def NAFNet_main(mode, save_model="nafnet_best.pth"):
+def NAFNet_main(mode, save_model="nafnet_best_100_20_e70.pth"):
     """
     Trains the NAFNet denoiser or uses a trained NAFNet to denoise an image.
  
@@ -188,12 +223,12 @@ def NAFNet_main(mode, save_model="nafnet_best.pth"):
         train_set = BSDDataset(root=BSD400,
             patch_size=64,
             sigma_set=(15, 25, 50),
-            patches_per_image=10,
+            patches_per_image=100,
             seed=42)
         val_set = BSDDataset(root=BSD68,
             patch_size=64,
             sigma_set=(15, 25, 50),
-            patches_per_image=5,
+            patches_per_image=20,
             seed=0)
  
         train_loader = DataLoader(train_set, batch_size=32, shuffle=True)
@@ -209,7 +244,7 @@ def NAFNet_main(mode, save_model="nafnet_best.pth"):
         # Train for all epochs. fit() runs the loop, prints each epoch, saves the
         # best model by validation PSNR, and returns one results dict per epoch.
         history = fit_nafnet(model, train_loader, val_loader, optimizer, device,
-            epochs=50,
+            epochs=70,
             save_path=NAFNET_RES / save_model)
  
         # Pull out the per-epoch values for plotting
@@ -219,7 +254,8 @@ def NAFNet_main(mode, save_model="nafnet_best.pth"):
         val_ssims = [h["val_ssim"] for h in history]
  
         # Plot loss and psnr
-        loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path = NAFNET_RES / "training_plot.pdf")
+        efficiency_report(model, device, "NAFNet")
+        loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path = NAFNET_RES / "training_plot_100_20_e70.pdf")
  
     if mode == "denoise":
         # Choose device in order cuda, mps, cpu
@@ -243,8 +279,8 @@ def NAFNet_main(mode, save_model="nafnet_best.pth"):
  
         result = denoised.squeeze().cpu().numpy()
         NAFNET_RES.mkdir(parents=True, exist_ok=True)
-        save_grayscale_image(noisy, NAFNET_RES / "noisy_nafnet.png")
-        save_grayscale_image(result, NAFNET_RES / "denoise_nafnet.png")
+        save_grayscale_image(noisy, NAFNET_RES / "noisy_nafnet_100_20_e70.png")
+        save_grayscale_image(result, NAFNET_RES / "denoise_nafnet_100_20_e70.png")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train or denoise with the three image denoising models.")
@@ -256,6 +292,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    DnCNN_main(mode=args.mode)
-    CNN_main(mode=args.mode)
-    NAFNet_main(mode=args.mode)
+    DnCNN_main(mode = "train")
+    NAFNet_main(mode = "train")
+    CNN_main(mode = "train")
+   

@@ -52,6 +52,7 @@ def loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path):
     epochs = range(1, len(train_losses) + 1)
 
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 4))
+    fig.suptitle(f"Training with 100 patches/image and validation with 20 patches/image")
 
      #Loss
     ax1.plot(epochs, train_losses, label="Train Loss", c = "deeppink", zorder = 3)
