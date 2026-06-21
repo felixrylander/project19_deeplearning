@@ -10,6 +10,7 @@ from src.utils.paths import BSD400, BSD68, CNN_RES, DCNN_RES, NAFNET_RES
 
 from src.models.DnCNN.model_DnCNN import DnCNN
 from src.models.DnCNN.trainer_DnCNN import train_one_epoch, validate
+from src.models.DnCNN.loss_metrics import psnr, ssim
 from src.models.DnCNN.result_plots import denoise_image, loss_psnr, save_grayscale_image
 from src.preprocessing.input_data import BSDDataset
 
@@ -90,7 +91,7 @@ def DnCNN_main(mode, save_model = "dncnn_best_100_20_e70.pth"):
         train_losses, val_losses, val_psnrs, val_ssims = [], [], [], []
 
         # Training loop
-        for epoch in range(1, 71):
+        for epoch in range(1, 31):
             train_loss = train_one_epoch(model, train_loader, optimizer, device)
             val_loss, val_psnr, val_ssim = validate(model, val_loader, device)
 
@@ -114,11 +115,34 @@ def DnCNN_main(mode, save_model = "dncnn_best_100_20_e70.pth"):
         loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path = DCNN_RES / "training_plot_100_20_e70.pdf")
 
     if mode == "denoise":
-        # Denoise an image with trained network
-        noisy, result = denoise_image(model_path = DCNN_RES / save_model , image_path = BSD68 / "test003.png", sigma=25)
+        device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+        
+        # Load clean image for comparison
+        clean = load_image(BSD68 / "test003.png") / 255.0
+        clean_tensor = torch.from_numpy(clean).float().unsqueeze(0).unsqueeze(0).to(device)
+
         DCNN_RES.mkdir(parents=True, exist_ok=True)
-        save_grayscale_image(noisy, DCNN_RES / "noisy_100_20_e70.png")
-        save_grayscale_image(result, DCNN_RES / "denoise_100_20_e70.png")
+
+        for sigma in [5, 15, 25, 35, 50, 80]:
+            noisy, result = denoise_image(model_path=DCNN_RES / save_model, image_path=BSD68 / "test003.png", sigma=sigma)
+            
+            # Convert result to tensor for PSNR and SSIM
+            result_tensor = torch.from_numpy(result).float().unsqueeze(0).unsqueeze(0).to(device)
+
+            p = psnr(clean_tensor, result_tensor)
+            s = ssim(clean_tensor, result_tensor)
+            print(f"σ={sigma:2d} | PSNR: {p:.2f} dB | SSIM: {s:.4f}")
+
+            save_grayscale_image(noisy,  DCNN_RES / f"noisy_sigma_100_20_e70_{sigma}.png")
+            save_grayscale_image(result, DCNN_RES / f"denoised_sigma_100_20_e70_{sigma}.png")
+
+    # if mode == "denoise":
+    #     # Denoise an image with trained network
+    #     for sigma in [15, 25, 50]:
+    #         noisy, result = denoise_image(model_path = DCNN_RES / save_model , image_path = BSD68 / "test003.png", sigma=25)
+    #         DCNN_RES.mkdir(parents=True, exist_ok=True)
+    #         save_grayscale_image(noisy, DCNN_RES / f"noisy_100_20_e70_{sigma}.png")
+    #         save_grayscale_image(result, DCNN_RES / f"denoise_100_20_e70_{sigma}.png")
 
 
 def CNN_main(mode, save_model = "cnn_best_100_20_e70.pth"):
@@ -185,19 +209,43 @@ def CNN_main(mode, save_model = "cnn_best_100_20_e70.pth"):
  
         # Load a test image, add noise, normalise to [0, 1]
         image = load_image(BSD68 / "test003.png")
-        rng = np.random.default_rng(42)
-        noisy = add_gaussian_noise(image, 25, rng) / 255.0
- 
-        tensor = torch.from_numpy(noisy).float().unsqueeze(0).unsqueeze(0).to(device)
- 
-        # The CNN predicts the clean image directly, then it is clamped to [0, 1]
-        with torch.no_grad():
-            denoised = torch.clamp(model(tensor), 0, 1)
- 
-        result = denoised.squeeze().cpu().numpy()
+        clean = image / 255.0
+        clean_tensor = torch.from_numpy(clean).float().unsqueeze(0).unsqueeze(0).to(device)
+
         CNN_RES.mkdir(parents=True, exist_ok=True)
-        save_grayscale_image(noisy, CNN_RES / "noisy_cnn_100_20_e70.png")
-        save_grayscale_image(result, CNN_RES / "denoise_cnn_100_20_e70.png")
+        rng = np.random.default_rng(42)
+
+        for sigma in [15, 25, 35, 50]:
+            noisy = add_gaussian_noise(image, sigma, rng) / 255.0
+            tensor = torch.from_numpy(noisy).float().unsqueeze(0).unsqueeze(0).to(device)
+
+            # CNN predicts clean image directly
+            with torch.no_grad():
+                denoised = torch.clamp(model(tensor), 0, 1)
+
+            result = denoised.squeeze().cpu().numpy()
+            result_tensor = torch.from_numpy(result).float().unsqueeze(0).unsqueeze(0).to(device)
+
+            p = psnr(clean_tensor, result_tensor)
+            s = ssim(clean_tensor, result_tensor)
+            print(f"σ={sigma:2d} | PSNR: {p:.2f} dB | SSIM: {s:.4f}")
+
+            save_grayscale_image(noisy,  CNN_RES / f"noisy_sigma_100_20_e70_{sigma}.png")
+            save_grayscale_image(result, CNN_RES / f"denoised_sigma_100_20_e70_{sigma}.png")
+
+        
+        # noisy = add_gaussian_noise(image, 25, rng) / 255.0
+ 
+        # tensor = torch.from_numpy(noisy).float().unsqueeze(0).unsqueeze(0).to(device)
+ 
+        # # The CNN predicts the clean image directly, then it is clamped to [0, 1]
+        # with torch.no_grad():
+        #     denoised = torch.clamp(model(tensor), 0, 1)
+ 
+        # result = denoised.squeeze().cpu().numpy()
+        # CNN_RES.mkdir(parents=True, exist_ok=True)
+        # save_grayscale_image(noisy, CNN_RES / "noisy_cnn_100_20_e70.png")
+        # save_grayscale_image(result, CNN_RES / "denoise_cnn_100_20_e70.png")
 
 
 def NAFNet_main(mode, save_model="nafnet_best_100_20_e70.pth"):
@@ -258,29 +306,38 @@ def NAFNet_main(mode, save_model="nafnet_best_100_20_e70.pth"):
         loss_psnr(train_losses, val_losses, val_psnrs, val_ssims, save_path = NAFNET_RES / "training_plot_100_20_e70.pdf")
  
     if mode == "denoise":
-        # Choose device in order cuda, mps, cpu
         device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
- 
+
         # Load trained model
         model = NAFNet().to(device)
         model.load_state_dict(torch.load(NAFNET_RES / save_model, map_location=device))
         model.eval()
- 
-        # Load a test image, add noise, normalise to [0, 1]
+
+        # Load clean image for comparison
         image = load_image(BSD68 / "test003.png")
-        rng = np.random.default_rng(42)
-        noisy = add_gaussian_noise(image, 25, rng) / 255.0
- 
-        tensor = torch.from_numpy(noisy).float().unsqueeze(0).unsqueeze(0).to(device)
- 
-        # NAFNet predicts the clean image directly, then it is clamped to [0, 1]
-        with torch.no_grad():
-            denoised = torch.clamp(model(tensor), 0, 1)
- 
-        result = denoised.squeeze().cpu().numpy()
+        clean = image / 255.0
+        clean_tensor = torch.from_numpy(clean).float().unsqueeze(0).unsqueeze(0).to(device)
+
         NAFNET_RES.mkdir(parents=True, exist_ok=True)
-        save_grayscale_image(noisy, NAFNET_RES / "noisy_nafnet_100_20_e70.png")
-        save_grayscale_image(result, NAFNET_RES / "denoise_nafnet_100_20_e70.png")
+        rng = np.random.default_rng(42)
+
+        for sigma in [15, 25, 35, 50]:
+            noisy = add_gaussian_noise(image, sigma, rng) / 255.0
+            tensor = torch.from_numpy(noisy).float().unsqueeze(0).unsqueeze(0).to(device)
+
+            # NAFNet predicts clean image directly
+            with torch.no_grad():
+                denoised = torch.clamp(model(tensor), 0, 1)
+
+            result = denoised.squeeze().cpu().numpy()
+            result_tensor = torch.from_numpy(result).float().unsqueeze(0).unsqueeze(0).to(device)
+
+            p = psnr(clean_tensor, result_tensor)
+            s = ssim(clean_tensor, result_tensor)
+            print(f"sigma={sigma:2d} | PSNR: {p:.2f} dB | SSIM: {s:.4f}")
+
+            save_grayscale_image(noisy,  NAFNET_RES / f"noisy_sigma_100_20__e70_{sigma}.png")
+            save_grayscale_image(result, NAFNET_RES / f"denoised_sigma_100_20_e70_{sigma}.png")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train or denoise with the three image denoising models.")
@@ -292,7 +349,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    DnCNN_main(mode = "train")
+    #DnCNN_main(mode = "denoise")
+    #CNN_main(mode = "denoise")
     NAFNet_main(mode = "train")
-    CNN_main(mode = "train")
    
