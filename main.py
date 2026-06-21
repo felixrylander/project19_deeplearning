@@ -136,6 +136,28 @@ def DnCNN_main(mode, save_model = "dncnn_best_100_20_e70.pth"):
             save_grayscale_image(noisy,  DCNN_RES / f"noisy_sigma_100_20_e70_{sigma}.png")
             save_grayscale_image(result, DCNN_RES / f"denoised_sigma_100_20_e70_{sigma}.png")
 
+        peak = 25
+        model = DnCNN().to(device)
+        model.load_state_dict(torch.load(DCNN_RES / save_model, map_location=device))
+        model.eval()
+
+        noisy = add_poisson_noise(clean * 255.0, peak, np.random.default_rng(42)) / 255.0
+        tensor = torch.from_numpy(noisy).float().unsqueeze(0).unsqueeze(0).to(device)
+
+        with torch.no_grad():
+            residual = model(tensor)
+            denoised = torch.clamp(tensor - residual, 0, 1)
+
+        result = denoised.squeeze().cpu().numpy()
+        result_tensor = torch.from_numpy(result).float().unsqueeze(0).unsqueeze(0).to(device)
+
+        p = psnr(clean_tensor, result_tensor)
+        s = ssim(clean_tensor, result_tensor)
+        print(f"peak={peak:2d} | PSNR: {p:.2f} dB | SSIM: {s:.4f}")
+
+        save_grayscale_image(noisy, DCNN_RES / f"noisy_poisson_100_20_e70_{peak}.png")
+        save_grayscale_image(result, DCNN_RES / f"denoised_poisson_100_20_e70_{peak}.png")
+
     # if mode == "denoise":
     #     # Denoise an image with trained network
     #     for sigma in [15, 25, 50]:
@@ -233,19 +255,39 @@ def CNN_main(mode, save_model = "cnn_best_100_20_e70.pth"):
             save_grayscale_image(noisy,  CNN_RES / f"noisy_sigma_100_20_e70_{sigma}.png")
             save_grayscale_image(result, CNN_RES / f"denoised_sigma_100_20_e70_{sigma}.png")
 
-        
-        # noisy = add_gaussian_noise(image, 25, rng) / 255.0
- 
-        # tensor = torch.from_numpy(noisy).float().unsqueeze(0).unsqueeze(0).to(device)
- 
-        # # The CNN predicts the clean image directly, then it is clamped to [0, 1]
-        # with torch.no_grad():
-        #     denoised = torch.clamp(model(tensor), 0, 1)
- 
-        # result = denoised.squeeze().cpu().numpy()
-        # CNN_RES.mkdir(parents=True, exist_ok=True)
-        # save_grayscale_image(noisy, CNN_RES / "noisy_cnn_100_20_e70.png")
-        # save_grayscale_image(result, CNN_RES / "denoise_cnn_100_20_e70.png")
+        peak = 25
+        noisy = add_poisson_noise(image, peak, rng) / 255.0
+        tensor = torch.from_numpy(noisy).float().unsqueeze(0).unsqueeze(0).to(device)
+
+        with torch.no_grad():
+            denoised = torch.clamp(model(tensor), 0, 1)
+
+        result = denoised.squeeze().cpu().numpy()
+        result_tensor = torch.from_numpy(result).float().unsqueeze(0).unsqueeze(0).to(device)
+
+        p = psnr(clean_tensor, result_tensor)
+        s = ssim(clean_tensor, result_tensor)
+        print(f"peak={peak:2d} | PSNR: {p:.2f} dB | SSIM: {s:.4f}")
+
+        save_grayscale_image(noisy,  CNN_RES / f"noisy_poisson_100_20_e70_{peak}.png")
+        save_grayscale_image(result, CNN_RES / f"denoised_poisson_100_20_e70_{peak}.png")
+
+        peak = 25
+        noisy = add_poisson_noise(image, peak, rng) / 255.0
+        tensor = torch.from_numpy(noisy).float().unsqueeze(0).unsqueeze(0).to(device)
+
+        with torch.no_grad():
+            denoised = torch.clamp(model(tensor), 0, 1)
+
+        result = denoised.squeeze().cpu().numpy()
+        result_tensor = torch.from_numpy(result).float().unsqueeze(0).unsqueeze(0).to(device)
+
+        p = psnr(clean_tensor, result_tensor)
+        s = ssim(clean_tensor, result_tensor)
+        print(f"peak={peak:2d} | PSNR: {p:.2f} dB | SSIM: {s:.4f}")
+
+        save_grayscale_image(noisy,  NAFNET_RES / f"noisy_poisson_100_20_e70_{peak}.png")
+        save_grayscale_image(result, NAFNET_RES / f"denoised_poisson_100_20_e70_{peak}.png")
 
 
 def NAFNet_main(mode, save_model="nafnet_best_100_20_e70.pth"):
@@ -334,7 +376,7 @@ def NAFNet_main(mode, save_model="nafnet_best_100_20_e70.pth"):
 
             p = psnr(clean_tensor, result_tensor)
             s = ssim(clean_tensor, result_tensor)
-            print(f"σ={sigma:2d} | PSNR: {p:.2f} dB | SSIM: {s:.4f}")
+            print(f"sigma={sigma:2d} | PSNR: {p:.2f} dB | SSIM: {s:.4f}")
 
             save_grayscale_image(noisy,  NAFNET_RES / f"noisy_sigma_100_20_e70_{sigma}.png")
             save_grayscale_image(result, NAFNET_RES / f"denoised_sigma_100_20_e70_{sigma}.png")
