@@ -17,7 +17,7 @@ from src.preprocessing.input_data import BSDDataset
 from src.models.CNN.model_CNN import CNNDenoiser
 from src.models.CNN.trainer_CNN import fit
 from src.models.CNN.loss_metrics_CNN import count_parameters
-from src.preprocessing.noise import load_image, add_gaussian_noise
+from src.preprocessing.noise import load_image, add_gaussian_noise, add_poisson_noise
 
 from src.models.NAFNet.model_NAFNet import NAFNet
 from src.models.NAFNet.trainer_NAFNet import fit as fit_nafnet
@@ -334,10 +334,27 @@ def NAFNet_main(mode, save_model="nafnet_best_100_20_e70.pth"):
 
             p = psnr(clean_tensor, result_tensor)
             s = ssim(clean_tensor, result_tensor)
-            print(f"sigma={sigma:2d} | PSNR: {p:.2f} dB | SSIM: {s:.4f}")
+            print(f"σ={sigma:2d} | PSNR: {p:.2f} dB | SSIM: {s:.4f}")
 
-            save_grayscale_image(noisy,  NAFNET_RES / f"noisy_sigma_100_20__e70_{sigma}.png")
+            save_grayscale_image(noisy,  NAFNET_RES / f"noisy_sigma_100_20_e70_{sigma}.png")
             save_grayscale_image(result, NAFNET_RES / f"denoised_sigma_100_20_e70_{sigma}.png")
+
+        peak = 25
+        noisy = add_poisson_noise(image, peak, rng) / 255.0
+        tensor = torch.from_numpy(noisy).float().unsqueeze(0).unsqueeze(0).to(device)
+
+        with torch.no_grad():
+            denoised = torch.clamp(model(tensor), 0, 1)
+
+        result = denoised.squeeze().cpu().numpy()
+        result_tensor = torch.from_numpy(result).float().unsqueeze(0).unsqueeze(0).to(device)
+
+        p = psnr(clean_tensor, result_tensor)
+        s = ssim(clean_tensor, result_tensor)
+        print(f"peak={peak:2d} | PSNR: {p:.2f} dB | SSIM: {s:.4f}")
+
+        save_grayscale_image(noisy,  NAFNET_RES / f"noisy_poisson_100_20_e70_{peak}.png")
+        save_grayscale_image(result, NAFNET_RES / f"denoised_poisson_100_20_e70_{peak}.png")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train or denoise with the three image denoising models.")

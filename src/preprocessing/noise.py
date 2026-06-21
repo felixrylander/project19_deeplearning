@@ -18,6 +18,16 @@ def add_gaussian_noise(image: np.ndarray, sigma: float, rng: np.random.Generator
     noise = rng.normal(0, sigma, image.shape).astype(np.float32)
     return np.clip(image.astype(np.float32) + noise, 0, 255).astype(np.float32)
 
+
+def add_poisson_noise(image: np.ndarray, peak: float, rng: np.random.Generator) -> np.ndarray:
+    """Add simple Poisson noise controlled by one peak parameter."""
+    rng = rng or np.random.default_rng()
+    scaled = image.astype(np.float32) / 255.0
+    noisy = rng.poisson(scaled * peak).astype(np.float32) / peak
+    return np.clip(noisy * 255.0, 0, 255).astype(np.float32)
+
+
+
 def img_patch(image: np.ndarray, rng: np.random.Generator, patch_size = 64) -> np.ndarray:
     """
     Creates a patch of full image from dataset.
