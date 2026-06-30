@@ -392,11 +392,11 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    DnCNN_main(mode = "train")
-    CNN_main(mode = "train")
+    #DnCNN_main(mode = "train")
+    #CNN_main(mode = "train")
 
-    #DnCNN_main(mode = "denoise")
-    #CNN_main(mode = "denoise")
+    DnCNN_main(mode = "denoise")
+    CNN_main(mode = "denoise")
 
 
 
